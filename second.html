@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Mortgage Interest Rates in USA</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://rawgit.com/susielu/d3-annotation/master/d3-annotation.min.js"></script>
+   <link rel="stylesheet" href="menu.css" type="text/css"/>
+    <style>
+        .tooltip {
+            position: absolute;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            padding: 8px;
+            font-size: 14px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="button-container">
+        <button class="button" onclick="window.location.href='index.html'">1. 1971 - 1988</button>
+        <button class="button" onclick="window.location.href='second.html'">2. 1988 - 2006</button>
+        <button class="button" onclick="window.location.href='third.html'">3. 2006 - 2023</button>
+        <button class="button" onclick="window.location.href='fourth.html'">4. Full Timeline </button>
+    </div>
+
+    <br>
+
+    <div id="chart-container">
+        <svg id="chart"></svg>
+    </div>
+
+    <script>
+        const svgWidth = 600;
+        const svgHeight = 400;
+        const margin = { top: 30, right: 30, bottom: 50, left: 50 };
+        const width = svgWidth - margin.left - margin.right;
+        const height = svgHeight - margin.top - margin.bottom;
+
+        const svg = d3.select("#chart")
+            .attr("width", svgWidth)
+            .attr("height", svgHeight)
+            .append("g")
+            .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+        const tooltip = d3.select("#chart-container")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .style("text-anchor", "middle")
+            .style("font-size", "20px")
+            .text("30-Year Fixed Rate Mortgage Average Interest Rates in USA");
+
+        d3.csv("data.csv").then(data => {
+            if (data === null || data.length === 0) {
+                console.error("Error: No data found in the CSV file.");
+                return;
+            }
+
+            data = data.slice(911, 1820);
+
+            const parseDate = d3.timeParse("%Y-%m-%d");
+            data.forEach(d => {
+                d.DATE = parseDate(d.DATE);
+                d.MORTGAGE30US = +d.MORTGAGE30US; 
+            });
+
+            if (data.some(d => isNaN(d.DATE) || isNaN(d.MORTGAGE30US))) {
+                console.error("Error: Invalid or missing data in the CSV file.");
+                return;
+            }
+
+            const xScale = d3.scaleTime()
+                .domain(d3.extent(data, d => d.DATE))
+                .range([0, width]);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, 20]) //d3.max(data, d => d.MORTGAGE30US)
+                .range([height, 0]);
+
+            const line = d3.line()
+                .x(d => xScale(d.DATE))
+                .y(d => yScale(d.MORTGAGE30US));
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 2)
+                .attr("d", line)
+                .on("mouseover", function (event, d) {
+                    const mouseDate = xScale.invert(d3.pointer(event)[0]);
+                    const bisect = d3.bisector(d => d.DATE).right;
+                    const index = bisect(data, mouseDate);
+                    const dataPoint = data[index];
+
+                    tooltip.transition()
+                        .duration(200)
+                        .style("opacity", 1);
+
+                    const formatValue = d3.format(".2f");
+                    const xDate = d3.timeFormat("%b %d, %Y")(dataPoint.DATE);
+                    const yValue = formatValue(dataPoint.MORTGAGE30US);
+
+                    tooltip.html(`<strong>Date:</strong> ${xDate}<br><strong>Mortgage Rate:</strong> ${yValue}%`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 30) + "px");
+                })
+                .on("mousemove", function (event) {
+                    tooltip.style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 30) + "px");
+                })
+                .on("mouseout", function () {
+                    tooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                });
+
+            svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .call(d3.axisBottom(xScale));
+
+            svg.append("g")
+                .call(d3.axisLeft(yScale));
+
+            svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .call(d3.axisBottom(xScale));
+
+            svg.append("g")
+                .call(d3.axisLeft(yScale));
+
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", height + margin.bottom - 10)
+                .style("text-anchor", "middle")
+                .text("Year");
+
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -height / 2)
+                .attr("y", -margin.left + 20)
+                .style("text-anchor", "middle")
+                .text("Interest Rate (%)");
+
+
+            const annotations = [
+                {
+                    type: d3.annotationCalloutElbow,
+                    note: {
+                        title: "1990-1991 Recession",
+                        label: "The economy was weakening as a result of restrictive monetary policy.",
+                        wrap: 150, 
+                    },
+                    x: xScale(parseDate("1990-9-28")), 
+                    y: yScale(10.22), 
+                    dx: 50, 
+                    dy: -30, 
+                },
+                {
+                    type: d3.annotationCalloutElbow,
+                    note: {
+                        title: "2000-2001 Recession",
+                        label: "The Y2K scare (also known as the Year 2000 scare) may have contributed to the 2001 recession.",
+                        wrap: 150, 
+                    },
+                    x: xScale(parseDate("2001-08-10")), 
+                    y: yScale(7.00),
+                    dx: 0, 
+                    dy: -30,
+                },
+            ];
+
+            const makeAnnotations = d3.annotation()
+                .type(d3.annotationCalloutElbow)
+                .annotations(annotations);
+
+            svg.append("g")
+                .attr("class", "annotation-group")
+                .call(makeAnnotations);
+
+        }).catch(error => {
+            console.error("Error loading CSV file:", error);
+        });
+    </script>
+
+<p>
+    <a href="https://fred.stlouisfed.org/series/MORTGAGE30US">Data</a> from Federal Reserve Bank of St. Louis
+</p>
+</body>
+
+</html>
